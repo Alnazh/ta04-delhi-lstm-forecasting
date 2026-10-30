@@ -1,0 +1,7 @@
+__pycache__/
+.ipynb_checkpoints/
+.venv/
+*.pyc
+# CSV mentah dari Kaggle tidak perlu di-commit; hanya data bersih yang dipakai aplikasi
+data/*.csv
+!data/delhi_climate_clean.csv

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SuhuDelhi - Prediksi Suhu Harian dengan LSTM</title>
+<meta name="description" content="Prediksi suhu rata-rata harian di Delhi menggunakan model LSTM.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%98%80%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=4) }}">
+<script src="{{ url_for('static', filename='js/theme.js', v=4) }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+<script src="{{ url_for('static', filename='js/app.js', v=4) }}" defer></script>
+</head>
+<body data-timesteps="{{ timesteps }}" data-max-days="{{ max_days }}">
+<div id="prog"></div>
+<nav><div class="wrap">
+  <a class="brand" href="#beranda"><span class="sun">&#9728;&#65039;</span> SuhuDelhi</a>
+  <div class="links" id="navlinks"><a href="#beranda">Beranda</a><a href="#cara">Cara Kerja</a><a href="#prediksi">Prediksi</a><a href="#performa">Performa Model</a><a href="#dataset">Dataset</a></div>
+  <div class="tools"><button class="ibtn" id="theme" aria-label="Ganti tema terang atau gelap">&#127769;</button><a class="cta" href="#prediksi">Coba Sekarang</a></div>
+</div></nav>
+
+<header class="hero" id="beranda">
+  <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+  <div class="wrap">
+    <div>
+      <h1>Prediksi suhu rata-rata harian di <span class="gr">Delhi</span></h1>
+      <p>Model LSTM membaca {{ timesteps }} hari suhu terakhir untuk menebak suhu hari berikutnya, lalu mengulanginya sampai {{ max_days }} hari ke depan.</p>
+      <div class="btns"><a class="btn" href="#prediksi">Mulai Prediksi</a><a class="btn ghost" href="#performa">Lihat Performa Model</a></div>
+    </div>
+    <div class="now" aria-live="polite">
+      <div class="top"><span id="now-lbl">Memuat prakiraan...</span>
+        <span class="unit" role="group" aria-label="Satuan suhu"><button data-u="C" aria-pressed="true">&deg;C</button><button data-u="F" aria-pressed="false">&deg;F</button></span></div>
+      <div class="row"><div class="emo" id="now-emo">&#9728;&#65039;</div>
+        <div><div class="big"><span id="now-val">--</span><small id="now-u">&deg;C</small></div><span class="feel" id="now-feel">...</span></div></div>
+      <div id="now-delta" class="delta">&nbsp;</div>
+      <div class="scale-bar"><div class="scale-dot" id="dot"></div></div>
+      <div class="scale-lbl"><span id="sc1">5&deg;C</span><span id="sc2">20&deg;C</span><span id="sc3">38&deg;C</span></div>
+      <div class="mini-strip" id="mini"></div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="stats" aria-label="Ringkasan model (data uji)">
+    <div class="stat s1 reveal"><span class="ic">&#127919;</span><div class="k">RMSE data uji</div><div class="v" id="m-rmse">-</div><div class="s">rata-rata meleset</div></div>
+    <div class="stat s2 reveal"><span class="ic">&#128207;</span><div class="k">MAE data uji</div><div class="v" id="m-mae">-</div><div class="s">selisih absolut rata-rata</div></div>
+    <div class="stat s3 reveal"><span class="ic">&#128260;</span><div class="k">RMSE tebakan "sama dengan kemarin"</div><div class="v" id="m-naive">-</div><div class="s">pembanding sederhana</div></div>
+    <div class="stat s4 reveal"><span class="ic">&#127942;</span><div class="k">Dibanding pembanding</div><div class="v" id="m-win">-</div><div class="s" id="m-win-s">&nbsp;</div></div>
+  </section>
+
+  <section id="cara">
+    <div class="head reveal"><span class="tg">Cara kerja</span><h2>Tiga langkah, prakiraan langsung</h2><p>Tidak perlu paham deep learning. Pilih jumlah hari, sisanya dihitung model.</p></div>
+    <div class="steps">
+      <div class="step reveal"><i>1</i><h3>Baca suhu terakhir</h3><p>Model mengambil {{ timesteps }} hari suhu terakhir dari dataset, lalu menskalakannya ke rentang 0-1.</p></div>
+      <div class="step reveal"><i>2</i><h3>LSTM menebak satu hari</h3><p>Dua lapisan LSTM mengingat pola naik-turun suhu dan menebak suhu hari berikutnya.</p></div>
+      <div class="step reveal"><i>3</i><h3>Ulangi sampai tujuan</h3><p>Tebakan dimasukkan ke deretan input, lalu langkah 2 diulang sampai jumlah hari yang kamu pilih.</p></div>
+    </div>
+    <div class="panel reveal gap-top">
+      <h3>&#127918; Simulasi: lihat jendela input bergeser</h3>
+      <p class="d">Kotak polos adalah data asli, kotak bergaris putus adalah hasil tebakan model yang dipakai lagi sebagai input. Warna mengikuti suhu.</p>
+      <div class="bar"><div class="seg"><button id="sim-play" aria-pressed="false">&#9654; Putar</button><button id="sim-step" aria-pressed="false">Langkah berikutnya</button><button id="sim-reset" aria-pressed="false">&#8634; Ulang</button></div></div>
+      <div class="sim-row" id="sim-win"></div>
+      <div class="lstm"><span>&#11015;</span><span class="core" id="sim-core">LSTM</span><span>&#10145;</span><span class="out" id="sim-out">?</span></div>
+      <div class="sim-cap" id="sim-cap">Menunggu data...</div>
+    </div>
+  </section>
+
+  <section id="prediksi">
+    <div class="head reveal"><span class="tg">Prediksi</span><h2>Suhu beberapa hari ke depan</h2><p>Warna kartu mengikuti suhu: biru dingin, kuning hangat, merah panas. Klik kartu untuk menyorotnya di grafik.</p></div>
+    <div class="panel reveal">
+      <div class="bar">
+        <div><div class="gl" id="l1">Jumlah hari ke depan</div>
+          <div class="rng"><input type="range" id="days-range" min="1" max="{{ max_days }}" value="7" aria-labelledby="l1"><span class="rv" id="days-val">7 hari</span></div></div>
+        <div><div class="gl" id="l1b">Pilihan cepat</div><div class="seg" id="seg-days" role="group" aria-labelledby="l1b">
+          <button data-v="1" aria-pressed="false">1</button><button data-v="3" aria-pressed="false">3</button><button data-v="7" aria-pressed="true">7</button><button data-v="14" aria-pressed="false">14</button><button data-v="{{ max_days }}" aria-pressed="false">{{ max_days }}</button></div></div>
+      </div>
+      <div class="bar">
+        <div><div class="gl" id="l2">Riwayat di grafik</div><div class="seg" id="seg-hist" role="group" aria-labelledby="l2">
+          <button data-v="60" aria-pressed="false">60 hari</button><button data-v="180" aria-pressed="true">180 hari</button><button data-v="365" aria-pressed="false">1 tahun</button><button data-v="100000" aria-pressed="false">Maks.</button></div></div>
+        <div><div class="gl" id="l3">Bentuk prakiraan</div><div class="seg" id="seg-mode" role="group" aria-labelledby="l3">
+          <button data-v="line" aria-pressed="true">Garis</button><button data-v="bar" aria-pressed="false">Batang</button></div></div>
+        <button class="ibtn dl" id="dl">&#11015;&#65039; Unduh CSV</button>
+      </div>
+      <div class="tiles" id="tiles"><div class="sk"></div></div>
+      <div class="cb"><canvas id="cMain" aria-label="Grafik suhu historis dan prakiraan"></canvas></div>
+      <div class="err" id="err" role="alert"></div>
+      <div class="exp" id="exp-fc"><b class="h">Cara membaca grafik ini</b><span>Memuat penjelasan...</span></div>
+    </div>
+    <div class="panel reveal">
+      <h3>Pola suhu per bulan</h3><p class="d">Rata-rata suhu tiap bulan dari seluruh data historis.</p>
+      <div class="cb cb-s"><canvas id="cMonth" aria-label="Rata-rata suhu per bulan"></canvas></div>
+      <div class="exp" id="exp-mo"><b class="h">Apa artinya?</b><span>Memuat...</span></div>
+    </div>
+  </section>
+
+  <section id="performa">
+    <div class="head reveal"><span class="tg">Performa model</span><h2>Seberapa bagus model ini?</h2><p id="perf-sub">Dievaluasi pada data uji yang tidak dipakai saat pelatihan.</p></div>
+    <div class="panel reveal">
+      <h3>Suhu aktual vs prediksi</h3><p class="d">Semakin berimpit kedua garis, semakin baik modelnya.</p>
+      <div class="bar"><div><div class="gl" id="l4">Rentang tampilan</div><div class="seg" id="seg-rng" role="group" aria-labelledby="l4">
+        <button data-v="30" aria-pressed="false">30 hari</button><button data-v="90" aria-pressed="false">90 hari</button><button data-v="0" aria-pressed="true">Semua</button></div></div></div>
+      <div class="cb"><canvas id="cTest" aria-label="Aktual vs prediksi pada data uji"></canvas></div>
+      <div class="exp" id="exp-test"><b class="h">Apa artinya?</b><span>Memuat...</span></div>
+    </div>
+    <div class="panel reveal">
+      <h3>&#127919; Seberapa sering prediksi tepat?</h3><p class="d">Geser toleransi untuk melihat berapa persen prediksi yang selisihnya masih di dalam batas itu.</p>
+      <div class="tolwrap">
+        <div class="cb"><canvas id="cTol" aria-label="Persentase prediksi dalam toleransi"></canvas></div>
+        <div>
+          <div class="gl" id="l5">Toleransi selisih</div>
+          <div class="rng"><input type="range" id="tol" min="0.5" max="4" step="0.5" value="1" aria-labelledby="l5"><span class="rv" id="tol-val">&plusmn;1&deg;</span></div>
+          <div class="big-pct" id="tol-pct">-</div><div id="tol-sub" class="muted"></div>
+          <div class="chips" id="chips"></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel reveal">
+      <h3>Sebaran selisih prediksi dan aktual</h3><p class="d">Batang tinggi di tengah (dekat 0) berarti kebanyakan prediksi nyaris tepat.</p>
+      <div class="cb cb-s"><canvas id="cErr" aria-label="Histogram selisih prediksi dan aktual"></canvas></div>
+      <div class="exp" id="exp-err"><b class="h">Apa artinya?</b><span>Memuat...</span></div>
+      <h3 class="gap-top">Mana yang lebih merugikan?</h3>
+      <div class="two"><div class="mini m-over"><b id="over-n">-</b><p>Prediksi lebih panas dari aktual. Pengguna bisa mengira cuaca lebih gerah dari kenyataan.</p></div>
+      <div class="mini m-under"><b id="under-n">-</b><p>Prediksi lebih dingin dari aktual. Hari panas bisa diremehkan, ini yang lebih berisiko bagi peringatan panas.</p></div></div>
+    </div>
+  </section>
+
+  <section id="dataset">
+    <div class="head reveal"><span class="tg">Dataset</span><h2>Data yang dipakai</h2><p id="ds-sub">Daily Weather Time Series Data - Delhi, India dari Kaggle.</p></div>
+    <div class="panel reveal">
+      <table><thead><tr><th>Kolom</th><th>Jenis</th><th>Keterangan</th></tr></thead><tbody>
+        <tr><td><code>date</code></td><td>Tanggal</td><td>Penanda waktu harian, dijadikan index</td></tr>
+        <tr><td><code>meantemp</code></td><td>Target</td><td>Suhu rata-rata harian (&deg;C), yang diprediksi</td></tr>
+        <tr><td>Kolom cuaca lain</td><td>Numerik</td><td>Tidak dipakai pada versi ini (model univariat)</td></tr></tbody></table>
+      <div class="gl gap-top">Pembagian data (urut waktu)</div>
+      <div class="split" id="split"></div><div id="split-lbl" class="muted small"></div>
+    </div>
+  </section>
+</main>
+<footer>Model LSTM &middot; Flask &middot; <a href="https://www.kaggle.com/datasets/yug201/daily-climate-time-series-data-delhi-india" target="_blank" rel="noopener">Dataset Kaggle</a></footer>
+<button id="top" aria-label="Kembali ke atas">&#8593;</button>
+</body>
+</html>

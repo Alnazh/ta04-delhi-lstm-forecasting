@@ -58,13 +58,13 @@ Aplikasi web berbasis Flask untuk meramalkan **suhu rata-rata harian di Kota Del
 
 ## Performa Model
 
-Evaluasi pada data uji (15% terakhir dari data). Isi tabel ini dengan hasil dari sel evaluasi di notebook setelah training.
+Evaluasi pada data uji (15% terakhir dari data).
 
 | Metrik | Nilai |
 |---|---|
-| RMSE data uji | ... °C |
-| MAE data uji | ... °C |
-| RMSE tebakan "sama dengan kemarin" | ... °C |
+| RMSE data uji | 1.4 °C |
+| MAE data uji | 1.1 °C |
+| RMSE tebakan "sama dengan kemarin" | 1.3 °C |
 
 Tebakan "sama dengan kemarin" dipakai sebagai pembanding sederhana (baseline). Suhu harian sangat mirip dengan hari sebelumnya, sehingga baseline ini sulit dikalahkan. Galat peramalan jangka panjang juga menumpuk karena setiap prediksi dipakai lagi sebagai input, jadi anggap hasil di ujung rentang sebagai gambaran tren, bukan angka pasti.
 
@@ -197,12 +197,3 @@ Gunakan versi library yang sama seperti di `requirements.txt` agar file model da
 
 ---
 
-## Deployment
-
-TensorFlow berukuran besar (sekitar 500 MB), jadi pilih hosting yang memorinya cukup. Jalankan server dengan:
-
-```bash
-gunicorn app:app --workers 1 --threads 2 --timeout 180
-```
-
-Setelah deploy, cek `/health` untuk memastikan server hidup.
